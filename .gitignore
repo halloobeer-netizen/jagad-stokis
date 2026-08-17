@@ -1,0 +1,72 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# project-specific
+dev.log
+dev.out.log
+server.log
+*.log
+worklog.md
+
+# database (SQLite for local dev only)
+db/*.db
+db/*.db-journal
+
+# screenshots & temp files
+*.png
+verify-*.png
+tool-results/
+download/
+
+# Skills directory
+/skills/
+
+# examples & mini-services (not part of the app)
+/examples/
+/mini-services/
+
+# IDE
+.claude
+.z-ai-config
+.vscode
+.idea
