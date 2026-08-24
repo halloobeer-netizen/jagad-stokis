@@ -18,13 +18,10 @@ export interface WhatsAppOrderPayload {
 }
 
 // ── Fonnte config (server-side only) ──────────────────
-// Mendukung nama env yang sudah dipakai di Vercel (FOONTE_*)
-// sekaligus ejaan resmi FONNTE_* agar tetap kompatibel.
 const FONNTE_TOKEN = process.env.FOONTE_TOKEN || process.env.FONNTE_TOKEN || ''
 const FONNTE_ADMIN_PHONE = process.env.FOONTE_ADMIN_PHONE || process.env.FONNTE_ADMIN_PHONE || ''
 const FONNTE_API_URL = 'https://api.fonnte.com/send'
 
-// Fallback untuk link manual jika suatu saat dibutuhkan lagi.
 const ADMIN_WHATSAPP =
   process.env.NEXT_PUBLIC_ADMIN_WA ||
   process.env.FOONTE_ADMIN_PHONE ||
@@ -33,7 +30,6 @@ const ADMIN_WHATSAPP =
 
 /**
  * Kirim notifikasi pesanan baru otomatis ke WhatsApp Admin via Fonnte.
- * Dipanggil dari API route setelah order berhasil tersimpan.
  * Error tidak dilempar kembali agar checkout customer tetap berhasil.
  */
 export async function sendFonnteNotification(payload: WhatsAppOrderPayload): Promise<void> {
@@ -87,7 +83,7 @@ export async function sendFonnteNotification(payload: WhatsAppOrderPayload): Pro
 }
 
 /**
- * Format pesanan ke template WhatsApp.
+ * Format notifikasi WhatsApp yang ringkas dan mudah dipindai admin.
  */
 export function formatOrderMessage(payload: WhatsAppOrderPayload): string {
   const waktu = new Intl.DateTimeFormat('id-ID', {
@@ -99,11 +95,12 @@ export function formatOrderMessage(payload: WhatsAppOrderPayload): string {
     timeZone: 'Asia/Jakarta',
   }).format(new Date(payload.createdAt))
 
+  const totalQty = payload.items.reduce((sum, item) => sum + item.jumlah, 0)
   const lines: string[] = [
-    '🛒 *PESANAN BARU - JAGAD STOCKIS*',
-    '',
+    '🛒 *PESANAN BARU — JAGAD STOCKIS*',
+    '━━━━━━━━━━━━━━━━━━━━',
+    `🏪 *${payload.namaCabang}*`,
     `Kode Mitra : ${payload.kodeMitra}`,
-    `Cabang     : ${payload.namaCabang}`,
     `PIC        : ${payload.namaPic}`,
     `WhatsApp   : ${payload.whatsapp}`,
     `Alamat     : ${payload.alamat || '-'}`,
@@ -114,22 +111,26 @@ export function formatOrderMessage(payload: WhatsAppOrderPayload): string {
   }
 
   lines.push('')
-  lines.push('📦 *Detail Pesanan:*')
+  lines.push(`📦 *DETAIL PESANAN*  •  ${payload.items.length} produk / ${totalQty} item`)
+  lines.push('━━━━━━━━━━━━━━━━━━━━')
 
-  for (const item of payload.items) {
-    lines.push(`- ${item.namaProduk} : ${item.jumlah} ${item.satuan} × ${formatRupiah(item.hargaSatuan)} = ${formatRupiah(item.subtotal)}`)
-  }
+  payload.items.forEach((item, index) => {
+    lines.push(`${index + 1}. *${item.namaProduk}*`)
+    lines.push(`   ${item.jumlah} ${item.satuan} × ${formatRupiah(item.hargaSatuan)} = *${formatRupiah(item.subtotal)}*`)
+  })
 
   lines.push('')
-  lines.push(`Total      : *${formatRupiah(payload.totalHarga)}*`)
-  lines.push(`Waktu      : ${waktu}`)
+  lines.push('━━━━━━━━━━━━━━━━━━━━')
+  lines.push(`💰 *TOTAL: ${formatRupiah(payload.totalHarga)}*`)
+  lines.push(`🕒 ${waktu}`)
+  lines.push('')
+  lines.push('_Pesanan otomatis dari Jagad Stockis_')
 
   return lines.join('\n')
 }
 
 /**
- * Link manual tetap tersedia sebagai fallback internal, tetapi UI checkout
- * tidak lagi menampilkan tombol kirim WhatsApp.
+ * Link manual tetap tersedia sebagai fallback internal.
  */
 export function generateWhatsAppLink(payload: WhatsAppOrderPayload): string {
   const message = formatOrderMessage(payload)
