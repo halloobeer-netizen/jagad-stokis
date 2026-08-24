@@ -23,7 +23,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { kodeMitra, namaCabang, namaPic, whatsapp, alamat, catatan, items } = body
 
-    // ── Validasi field wajib ────────────────────────────────
     if (!kodeMitra?.trim()) {
       return NextResponse.json({ error: 'Kode Mitra wajib diisi', field: 'kodeMitra' }, { status: 400 })
     }
@@ -40,7 +39,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Pesanan tidak boleh kosong' }, { status: 400 })
     }
 
-    // Normalisasi item dan cegah productId duplikat membuat update stok berulang.
     const normalizedItems = new Map<string, number>()
     for (const item of items) {
       if (!item?.productId || typeof item.productId !== 'string') {
@@ -60,9 +58,6 @@ export async function POST(request: NextRequest) {
     }
 
     const productIds = [...normalizedItems.keys()]
-
-    // Ambil semua produk dalam SATU query. Sebelumnya satu query per item,
-    // sehingga checkout banyak item lebih lambat dan rentan timeout.
     const products = await db.product.findMany({
       where: { id: { in: productIds } },
     })
@@ -110,13 +105,8 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // ── Transaction: buat order + items + kurangi stok ─────
-    // Timeout diperpanjang karena checkout banyak item membutuhkan beberapa
-    // operasi update stok ke PostgreSQL dari environment serverless.
     const order = await db.$transaction(
       async (tx) => {
-        // Cek stok lagi di dalam transaksi untuk mengurangi risiko stok berubah
-        // setelah validasi awal.
         const currentProducts = await tx.product.findMany({
           where: { id: { in: productIds } },
         })
@@ -129,7 +119,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 1. Buat order beserta seluruh item dalam nested write.
         const newOrder = await tx.order.create({
           data: {
             kodeMitra: kodeMitra.trim(),
@@ -154,7 +143,6 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        // 2. Kurangi stok. updateMany dengan syarat stok >= jumlah mencegah stok minus.
         for (const vi of validatedItems) {
           const result = await tx.product.updateMany({
             where: {
@@ -178,7 +166,6 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    // ── Kirim notifikasi Wablas ke Admin (fire & forget) ──
     const waPayload: WhatsAppOrderPayload = {
       kodeMitra: order.kodeMitra,
       namaCabang: order.namaCabang,
@@ -197,10 +184,9 @@ export async function POST(request: NextRequest) {
       createdAt: order.createdAt.toISOString(),
     }
 
-    // Jangan biarkan kegagalan notifikasi WhatsApp menggagalkan response checkout.
-    void Promise.resolve(sendWablasNotification(waPayload)).catch(error => {
-      console.error('[Wablas notification]', error)
-    })
+    // Tunggu request ke Wablas selesai sebelum function serverless berakhir.
+    // sendWablasNotification menangani error internal sendiri sehingga checkout tetap sukses.
+    await sendWablasNotification(waPayload)
 
     return NextResponse.json(order, { status: 201 })
   } catch (error) {
