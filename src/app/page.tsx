@@ -21,7 +21,7 @@ import {
   Wheat,
   Soup,
   Drumstick,
-  Bottle,
+  BottleWine,
   Package,
   ArrowRight,
   Search,
@@ -240,7 +240,7 @@ function CategoryStrip() {
     { icon: Wheat, label: 'Tepung' },
     { icon: Soup, label: 'Saus & Bumbu' },
     { icon: Drumstick, label: 'Ayam & Daging' },
-    { icon: Bottle, label: 'Minyak' },
+    { icon: BottleWine, label: 'Minyak' },
     { icon: Package, label: 'Beras & Karbo' },
     { icon: Boxes, label: 'Kemasan' },
   ]
