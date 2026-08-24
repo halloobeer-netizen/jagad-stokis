@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { sendWablasNotification, type WhatsAppOrderPayload } from '@/lib/whatsapp'
+import { sendFonnteNotification, type WhatsAppOrderPayload } from '@/lib/whatsapp'
 
 export async function GET() {
   try {
@@ -184,9 +184,9 @@ export async function POST(request: NextRequest) {
       createdAt: order.createdAt.toISOString(),
     }
 
-    // Tunggu request ke Wablas selesai sebelum function serverless berakhir.
-    // sendWablasNotification menangani error internal sendiri sehingga checkout tetap sukses.
-    await sendWablasNotification(waPayload)
+    // Tunggu Fonnte selesai menerima request agar Vercel tidak menutup function terlalu cepat.
+    // Error Fonnte ditangani internal sehingga checkout tetap sukses.
+    await sendFonnteNotification(waPayload)
 
     return NextResponse.json(order, { status: 201 })
   } catch (error) {
