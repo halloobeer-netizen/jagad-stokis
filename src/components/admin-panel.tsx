@@ -6,11 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { AdminDashboardOverview } from '@/components/admin-dashboard-overview'
 import { AdminOrders } from '@/components/admin-orders'
 import { AdminProducts } from '@/components/admin-products'
 import { AdminStok } from '@/components/admin-stok'
 import {
   ArrowLeft,
+  BarChart3,
   Shield,
   Loader2,
   ClipboardList,
@@ -24,7 +26,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   const [password, setPassword] = useState('')
   const [loginLoading, setLoginLoading] = useState(false)
   const [loginError, setLoginError] = useState('')
-  const [activeTab, setActiveTab] = useState('orders')
+  const [activeTab, setActiveTab] = useState('overview')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -41,11 +43,14 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
       })
+
       if (!res.ok) {
         setLoginError('Password salah')
         return
       }
+
       setAuthenticated(true)
+      setActiveTab('overview')
     } catch {
       setLoginError('Gagal terhubung ke server')
     } finally {
@@ -70,10 +75,11 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                 <span className="block text-red-500 mt-1">Jagad Stockis</span>
               </h2>
               <p className="mt-5 text-slate-300 leading-relaxed text-base">
-                Kelola pesanan, katalog produk, dan stok dari satu dashboard yang terintegrasi untuk mendukung operasional franchise.
+                Pantau ringkasan operasional, kelola pesanan, katalog produk, dan stok dari satu dashboard.
               </p>
-              <div className="mt-8 grid grid-cols-3 gap-3">
+              <div className="mt-8 grid grid-cols-4 gap-3">
                 {[
+                  { icon: BarChart3, label: 'Ringkasan' },
                   { icon: ClipboardList, label: 'Pesanan' },
                   { icon: Package, label: 'Produk' },
                   { icon: Warehouse, label: 'Stok' },
@@ -129,10 +135,6 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                     Masuk ke Dashboard
                   </Button>
                 </form>
-
-                <div className="rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
-                  <p className="text-xs text-slate-500 leading-relaxed">Akses ini khusus administrator. Hubungi super admin jika Anda tidak memiliki password.</p>
-                </div>
               </CardContent>
             </Card>
           </section>
@@ -142,18 +144,19 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
   }
 
   const navItems = [
+    { value: 'overview', label: 'Ringkasan', desc: 'Pantau operasional', icon: BarChart3 },
     { value: 'orders', label: 'Pesanan', desc: 'Kelola order masuk', icon: ClipboardList },
     { value: 'products', label: 'Produk', desc: 'Kelola katalog', icon: Package },
     { value: 'stock', label: 'Stok', desc: 'Pantau persediaan', icon: Warehouse },
   ]
 
+  const current = navItems.find(item => item.value === activeTab) ?? navItems[0]
+
   return (
     <div className="min-h-screen bg-[#f4f6fa] text-slate-950">
-      <div className="min-h-screen lg:grid lg:grid-cols-[250px_1fr]">
+      <div className="min-h-screen lg:grid lg:grid-cols-[260px_1fr]">
         <aside className="hidden lg:flex lg:flex-col bg-slate-950 text-white border-r border-slate-800 sticky top-0 h-screen">
-          <div className="px-5 py-6 border-b border-white/10">
-            <AdminBrand />
-          </div>
+          <div className="px-5 py-6 border-b border-white/10"><AdminBrand /></div>
 
           <div className="px-4 pt-6">
             <p className="px-3 text-[10px] font-black tracking-[0.2em] uppercase text-slate-500">Menu Utama</p>
@@ -203,13 +206,13 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                     <Flame className="h-4 w-4" /> Operations Center
                   </div>
                   <h1 className="mt-2 text-2xl sm:text-3xl font-black tracking-tight">Dashboard Administrator</h1>
-                  <p className="mt-2 text-sm text-slate-400 max-w-2xl">Kelola aktivitas operasional Jagad Stockis dari satu pusat kontrol.</p>
+                  <p className="mt-2 text-sm text-slate-400 max-w-2xl">Pantau performa dan kelola aktivitas operasional Jagad Stockis dari satu pusat kontrol.</p>
                 </div>
                 <Badge className="self-start md:self-auto bg-emerald-500/15 text-emerald-300 border border-emerald-400/20 hover:bg-emerald-500/15 px-3 py-1.5 rounded-full">● Sistem Aktif</Badge>
               </div>
             </section>
 
-            <section className="grid sm:grid-cols-3 gap-3 sm:gap-4 lg:hidden">
+            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:hidden">
               {navItems.map(item => {
                 const active = activeTab === item.value
                 return (
@@ -222,28 +225,16 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
               })}
             </section>
 
-            <section className="grid sm:grid-cols-3 gap-4">
-              {navItems.map(item => (
-                <button key={item.value} onClick={() => setActiveTab(item.value)} className="group rounded-2xl bg-white border border-slate-200 p-4 sm:p-5 text-left shadow-sm hover:shadow-md hover:border-red-200 transition-all">
-                  <div className="flex items-center justify-between">
-                    <div className="h-10 w-10 rounded-xl bg-red-50 group-hover:bg-red-100 flex items-center justify-center transition-colors"><item.icon className="h-5 w-5 text-red-600" /></div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Module</span>
-                  </div>
-                  <p className="mt-4 font-black text-slate-950">{item.label}</p>
-                  <p className="mt-1 text-xs text-slate-500">{item.desc}</p>
-                </button>
-              ))}
-            </section>
-
             <section className="rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 sm:px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-red-600">Management</p>
-                  <h2 className="mt-1 text-lg font-black text-slate-950">{navItems.find(i => i.value === activeTab)?.label}</h2>
+                  <h2 className="mt-1 text-lg font-black text-slate-950">{current.label}</h2>
                 </div>
                 <Badge variant="outline" className="border-slate-200 text-slate-500 rounded-full">Admin</Badge>
               </div>
               <div className="p-4 sm:p-6 bg-[#fbfcfe]">
+                {activeTab === 'overview' && <AdminDashboardOverview onOpenOrders={() => setActiveTab('orders')} />}
                 {activeTab === 'orders' && <AdminOrders />}
                 {activeTab === 'products' && <AdminProducts />}
                 {activeTab === 'stock' && <AdminStok />}
