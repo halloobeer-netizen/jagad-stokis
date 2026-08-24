@@ -20,6 +20,7 @@ export interface WhatsAppOrderPayload {
 // ── Config (server-side only) ─────────────────────────
 const WABLAS_API_HOST = process.env.WABLAS_API_HOST || ''
 const WABLAS_TOKEN = process.env.WABLAS_TOKEN || ''
+const WABLAS_SECRET_KEY = process.env.WABLAS_SECRET_KEY || ''
 const WABLAS_ADMIN_PHONE = process.env.WABLAS_ADMIN_PHONE || ''
 
 // Fallback admin number untuk wa.me link (client-side)
@@ -30,28 +31,31 @@ const ADMIN_WHATSAPP = process.env.NEXT_PUBLIC_ADMIN_WA || process.env.WABLAS_AD
 /**
  * Kirim notifikasi pesanan baru ke WhatsApp Admin via Wablas.
  * Dipanggil dari server-side (API route) setelah order tersimpan.
- * Jika gagal, hanya log error — tidak throw.
+ * Jika gagal, hanya log error — tidak throw agar checkout tetap berhasil.
  */
 export async function sendWablasNotification(payload: WhatsAppOrderPayload): Promise<void> {
-  if (!WABLAS_API_HOST || !WABLAS_TOKEN || !WABLAS_ADMIN_PHONE) {
-    console.warn('[Wablas] WABLAS_API_HOST, WABLAS_TOKEN, atau WABLAS_ADMIN_PHONE belum dikonfigurasi')
+  if (!WABLAS_API_HOST || !WABLAS_TOKEN || !WABLAS_SECRET_KEY || !WABLAS_ADMIN_PHONE) {
+    console.warn('[Wablas] Konfigurasi WABLAS_API_HOST, WABLAS_TOKEN, WABLAS_SECRET_KEY, atau WABLAS_ADMIN_PHONE belum lengkap')
     return
   }
 
   const message = formatOrderMessage(payload)
   const url = `${WABLAS_API_HOST.replace(/\/+$/, '')}/api/send-message`
+  const authorization = `${WABLAS_TOKEN}.${WABLAS_SECRET_KEY}`
+  const phone = WABLAS_ADMIN_PHONE.replace(/[^0-9]/g, '')
 
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': WABLAS_TOKEN,
+        'Authorization': authorization,
       },
       body: JSON.stringify({
-        phone: WABLAS_ADMIN_PHONE,
+        phone,
         message,
       }),
+      cache: 'no-store',
     })
 
     if (!res.ok) {
@@ -61,7 +65,7 @@ export async function sendWablasNotification(payload: WhatsAppOrderPayload): Pro
     }
 
     const data = await res.json().catch(() => null)
-    console.log('[Wablas] Notifikasi terkirim', data)
+    console.log('[Wablas] Notifikasi pesanan terkirim ke admin', data)
   } catch (error) {
     console.error('[Wablas] Gagal mengirim notifikasi:', error)
   }
