@@ -17,91 +17,77 @@ export interface WhatsAppOrderPayload {
   createdAt: string
 }
 
-// ── Config (server-side only) ─────────────────────────
-const WABLAS_API_HOST = process.env.WABLAS_API_HOST || 'https://wablas.com'
-const WABLAS_TOKEN = process.env.WABLAS_TOKEN || ''
-const WABLAS_SECRET_KEY = process.env.WABLAS_SECRET_KEY || ''
-const WABLAS_ADMIN_PHONE = process.env.WABLAS_ADMIN_PHONE || ''
+// ── Fonnte config (server-side only) ──────────────────
+// Mendukung nama env yang sudah dipakai di Vercel (FOONTE_*)
+// sekaligus ejaan resmi FONNTE_* agar tetap kompatibel.
+const FONNTE_TOKEN = process.env.FOONTE_TOKEN || process.env.FONNTE_TOKEN || ''
+const FONNTE_ADMIN_PHONE = process.env.FOONTE_ADMIN_PHONE || process.env.FONNTE_ADMIN_PHONE || ''
+const FONNTE_API_URL = 'https://api.fonnte.com/send'
 
-// Fallback admin number untuk wa.me link (client-side)
-const ADMIN_WHATSAPP = process.env.NEXT_PUBLIC_ADMIN_WA || process.env.WABLAS_ADMIN_PHONE || ''
-
-function getWablasBaseUrl(): string {
-  const configured = WABLAS_API_HOST.replace(/\/+$/, '')
-
-  // Host lama smg.wablas.com sempat memutus koneksi TLS dari Vercel.
-  // Gunakan endpoint resmi Wablas bila host lama masih tersimpan di env.
-  if (!configured || configured.includes('smg.wablas.com')) {
-    return 'https://wablas.com'
-  }
-
-  return configured
-}
-
-// ── Wablas API ─────────────────────────────────────────
+// Fallback untuk link manual jika suatu saat dibutuhkan lagi.
+const ADMIN_WHATSAPP =
+  process.env.NEXT_PUBLIC_ADMIN_WA ||
+  process.env.FOONTE_ADMIN_PHONE ||
+  process.env.FONNTE_ADMIN_PHONE ||
+  ''
 
 /**
- * Kirim notifikasi pesanan baru ke WhatsApp Admin via Wablas.
- * Dipanggil dari server-side (API route) setelah order tersimpan.
- * Jika gagal, hanya log error — tidak throw agar checkout tetap berhasil.
+ * Kirim notifikasi pesanan baru otomatis ke WhatsApp Admin via Fonnte.
+ * Dipanggil dari API route setelah order berhasil tersimpan.
+ * Error tidak dilempar kembali agar checkout customer tetap berhasil.
  */
-export async function sendWablasNotification(payload: WhatsAppOrderPayload): Promise<void> {
-  if (!WABLAS_TOKEN || !WABLAS_SECRET_KEY || !WABLAS_ADMIN_PHONE) {
-    console.warn('[Wablas] Konfigurasi WABLAS_TOKEN, WABLAS_SECRET_KEY, atau WABLAS_ADMIN_PHONE belum lengkap')
+export async function sendFonnteNotification(payload: WhatsAppOrderPayload): Promise<void> {
+  if (!FONNTE_TOKEN || !FONNTE_ADMIN_PHONE) {
+    console.warn('[Fonnte] FOONTE_TOKEN/FONNTE_TOKEN atau FOONTE_ADMIN_PHONE/FONNTE_ADMIN_PHONE belum dikonfigurasi')
     return
   }
 
+  const target = FONNTE_ADMIN_PHONE.replace(/[^0-9]/g, '')
   const message = formatOrderMessage(payload)
-  const authorization = `${WABLAS_TOKEN}.${WABLAS_SECRET_KEY}`
-  const phone = WABLAS_ADMIN_PHONE.replace(/[^0-9]/g, '')
-  const url = `${getWablasBaseUrl()}/api/v2/send-message`
 
   try {
-    const res = await fetch(url, {
+    const body = new URLSearchParams()
+    body.set('target', target)
+    body.set('message', message)
+    body.set('countryCode', '62')
+
+    const res = await fetch(FONNTE_API_URL, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: authorization,
+        Authorization: FONNTE_TOKEN,
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
-      body: JSON.stringify({
-        data: [
-          {
-            phone,
-            message,
-            isGroup: 'false',
-            flag: 'instant',
-            priority: 'high',
-            retry: 3,
-          },
-        ],
-      }),
+      body: body.toString(),
       cache: 'no-store',
     })
 
     const text = await res.text().catch(() => '')
 
-    if (!res.ok) {
-      console.error(`[Wablas] HTTP ${res.status}: ${text}`)
-      return
-    }
-
-    let data: unknown = text
+    let data: any = null
     try {
       data = text ? JSON.parse(text) : null
     } catch {
-      // Biarkan response mentah untuk log diagnostik bila bukan JSON.
+      data = null
     }
 
-    console.log('[Wablas] Notifikasi pesanan diterima API Wablas', data)
+    if (!res.ok) {
+      console.error(`[Fonnte] HTTP ${res.status}: ${text}`)
+      return
+    }
+
+    if (data && data.status === false) {
+      console.error('[Fonnte] API menolak pengiriman:', data)
+      return
+    }
+
+    console.log('[Fonnte] Notifikasi pesanan berhasil dikirim/diterima API', data ?? text)
   } catch (error) {
-    console.error('[Wablas] Gagal mengirim notifikasi:', error)
+    console.error('[Fonnte] Gagal mengirim notifikasi:', error)
   }
 }
 
-// ── wa.me deep link (client-side) ─────────────────────
-
 /**
- * Format pesanan ke dalam template pesan WhatsApp yang rapi.
+ * Format pesanan ke template WhatsApp.
  */
 export function formatOrderMessage(payload: WhatsAppOrderPayload): string {
   const waktu = new Intl.DateTimeFormat('id-ID', {
@@ -131,7 +117,7 @@ export function formatOrderMessage(payload: WhatsAppOrderPayload): string {
   lines.push('📦 *Detail Pesanan:*')
 
   for (const item of payload.items) {
-    lines.push(`  - ${item.namaProduk} : ${item.jumlah} ${item.satuan}`)
+    lines.push(`- ${item.namaProduk} : ${item.jumlah} ${item.satuan} × ${formatRupiah(item.hargaSatuan)} = ${formatRupiah(item.subtotal)}`)
   }
 
   lines.push('')
@@ -142,7 +128,8 @@ export function formatOrderMessage(payload: WhatsAppOrderPayload): string {
 }
 
 /**
- * Generate wa.me deep link (tetap tersedia untuk tombol manual di frontend).
+ * Link manual tetap tersedia sebagai fallback internal, tetapi UI checkout
+ * tidak lagi menampilkan tombol kirim WhatsApp.
  */
 export function generateWhatsAppLink(payload: WhatsAppOrderPayload): string {
   const message = formatOrderMessage(payload)
@@ -151,7 +138,6 @@ export function generateWhatsAppLink(payload: WhatsAppOrderPayload): string {
   return `https://wa.me/${phone}?text=${encoded}`
 }
 
-// ── Helper ──────────────────────────────────────────────
 function formatRupiah(n: number): string {
   return new Intl.NumberFormat('id-ID', {
     style: 'currency',
