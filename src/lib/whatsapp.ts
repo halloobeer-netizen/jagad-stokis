@@ -18,13 +18,25 @@ export interface WhatsAppOrderPayload {
 }
 
 // ── Config (server-side only) ─────────────────────────
-const WABLAS_API_HOST = process.env.WABLAS_API_HOST || ''
+const WABLAS_API_HOST = process.env.WABLAS_API_HOST || 'https://wablas.com'
 const WABLAS_TOKEN = process.env.WABLAS_TOKEN || ''
 const WABLAS_SECRET_KEY = process.env.WABLAS_SECRET_KEY || ''
 const WABLAS_ADMIN_PHONE = process.env.WABLAS_ADMIN_PHONE || ''
 
 // Fallback admin number untuk wa.me link (client-side)
 const ADMIN_WHATSAPP = process.env.NEXT_PUBLIC_ADMIN_WA || process.env.WABLAS_ADMIN_PHONE || ''
+
+function getWablasBaseUrl(): string {
+  const configured = WABLAS_API_HOST.replace(/\/+$/, '')
+
+  // Host lama smg.wablas.com sempat memutus koneksi TLS dari Vercel.
+  // Gunakan endpoint resmi Wablas bila host lama masih tersimpan di env.
+  if (!configured || configured.includes('smg.wablas.com')) {
+    return 'https://wablas.com'
+  }
+
+  return configured
+}
 
 // ── Wablas API ─────────────────────────────────────────
 
@@ -34,38 +46,53 @@ const ADMIN_WHATSAPP = process.env.NEXT_PUBLIC_ADMIN_WA || process.env.WABLAS_AD
  * Jika gagal, hanya log error — tidak throw agar checkout tetap berhasil.
  */
 export async function sendWablasNotification(payload: WhatsAppOrderPayload): Promise<void> {
-  if (!WABLAS_API_HOST || !WABLAS_TOKEN || !WABLAS_SECRET_KEY || !WABLAS_ADMIN_PHONE) {
-    console.warn('[Wablas] Konfigurasi WABLAS_API_HOST, WABLAS_TOKEN, WABLAS_SECRET_KEY, atau WABLAS_ADMIN_PHONE belum lengkap')
+  if (!WABLAS_TOKEN || !WABLAS_SECRET_KEY || !WABLAS_ADMIN_PHONE) {
+    console.warn('[Wablas] Konfigurasi WABLAS_TOKEN, WABLAS_SECRET_KEY, atau WABLAS_ADMIN_PHONE belum lengkap')
     return
   }
 
   const message = formatOrderMessage(payload)
-  const url = `${WABLAS_API_HOST.replace(/\/+$/, '')}/api/send-message`
   const authorization = `${WABLAS_TOKEN}.${WABLAS_SECRET_KEY}`
   const phone = WABLAS_ADMIN_PHONE.replace(/[^0-9]/g, '')
+  const url = `${getWablasBaseUrl()}/api/v2/send-message`
 
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': authorization,
+        Authorization: authorization,
       },
       body: JSON.stringify({
-        phone,
-        message,
+        data: [
+          {
+            phone,
+            message,
+            isGroup: 'false',
+            flag: 'instant',
+            priority: 'high',
+            retry: 3,
+          },
+        ],
       }),
       cache: 'no-store',
     })
 
+    const text = await res.text().catch(() => '')
+
     if (!res.ok) {
-      const text = await res.text().catch(() => '')
       console.error(`[Wablas] HTTP ${res.status}: ${text}`)
       return
     }
 
-    const data = await res.json().catch(() => null)
-    console.log('[Wablas] Notifikasi pesanan terkirim ke admin', data)
+    let data: unknown = text
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      // Biarkan response mentah untuk log diagnostik bila bukan JSON.
+    }
+
+    console.log('[Wablas] Notifikasi pesanan diterima API Wablas', data)
   } catch (error) {
     console.error('[Wablas] Gagal mengirim notifikasi:', error)
   }
