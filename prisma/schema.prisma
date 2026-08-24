@@ -16,10 +16,23 @@ model Product {
   isActive   Boolean  @default(true) @map("is_active")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
-
   orderItems OrderItem[]
-
   @@map("products")
+}
+
+model Partner {
+  id         String   @id @default(cuid())
+  kodeMitra  String   @unique @map("kode_mitra")
+  namaCabang String   @map("nama_cabang")
+  namaPic    String   @map("nama_pic")
+  whatsapp   String
+  alamat     String   @default("")
+  pinHash    String   @map("pin_hash")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  @@index([kodeMitra])
+  @@map("partners")
 }
 
 model Order {
@@ -33,9 +46,7 @@ model Order {
   totalHarga  Int      @default(0) @map("total_harga")
   status      String   @default("menunggu")
   createdAt   DateTime @default(now()) @map("created_at")
-
   orderItems OrderItem[]
-
   @@map("orders")
 }
 
@@ -46,9 +57,7 @@ model OrderItem {
   jumlah      Int
   hargaSatuan Int     @map("harga_satuan")
   subtotal    Int
-
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
-
   @@map("order_items")
 }
