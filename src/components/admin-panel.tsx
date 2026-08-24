@@ -10,6 +10,7 @@ import { AdminDashboardOverview } from '@/components/admin-dashboard-overview'
 import { AdminOrders } from '@/components/admin-orders'
 import { AdminProducts } from '@/components/admin-products'
 import { AdminStok } from '@/components/admin-stok'
+import { AdminPartners } from '@/components/admin-partners'
 import {
   ArrowLeft,
   BarChart3,
@@ -19,6 +20,7 @@ import {
   Package,
   Warehouse,
   Flame,
+  Users,
 } from 'lucide-react'
 
 export function AdminPanel({ onBack }: { onBack: () => void }) {
@@ -75,14 +77,15 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                 <span className="block text-red-500 mt-1">Jagad Stockis</span>
               </h2>
               <p className="mt-5 text-slate-300 leading-relaxed text-base">
-                Pantau ringkasan operasional, kelola pesanan, katalog produk, dan stok dari satu dashboard.
+                Pantau ringkasan operasional, kelola pesanan, katalog produk, stok, dan akun mitra dari satu dashboard.
               </p>
-              <div className="mt-8 grid grid-cols-4 gap-3">
+              <div className="mt-8 grid grid-cols-5 gap-3">
                 {[
                   { icon: BarChart3, label: 'Ringkasan' },
                   { icon: ClipboardList, label: 'Pesanan' },
                   { icon: Package, label: 'Produk' },
                   { icon: Warehouse, label: 'Stok' },
+                  { icon: Users, label: 'Mitra' },
                 ].map(item => (
                   <div key={item.label} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm">
                     <item.icon className="h-5 w-5 text-red-400" />
@@ -148,6 +151,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
     { value: 'orders', label: 'Pesanan', desc: 'Kelola order masuk', icon: ClipboardList },
     { value: 'products', label: 'Produk', desc: 'Kelola katalog', icon: Package },
     { value: 'stock', label: 'Stok', desc: 'Pantau persediaan', icon: Warehouse },
+    { value: 'partners', label: 'Mitra', desc: 'Kelola akun mitra', icon: Users },
   ]
 
   const current = navItems.find(item => item.value === activeTab) ?? navItems[0]
@@ -212,7 +216,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
               </div>
             </section>
 
-            <section className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:hidden">
+            <section className="grid grid-cols-2 sm:grid-cols-5 gap-3 lg:hidden">
               {navItems.map(item => {
                 const active = activeTab === item.value
                 return (
@@ -238,6 +242,7 @@ export function AdminPanel({ onBack }: { onBack: () => void }) {
                 {activeTab === 'orders' && <AdminOrders />}
                 {activeTab === 'products' && <AdminProducts />}
                 {activeTab === 'stock' && <AdminStok />}
+                {activeTab === 'partners' && <AdminPartners />}
               </div>
             </section>
           </main>
