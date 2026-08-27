@@ -9,6 +9,14 @@ export async function GET(request: NextRequest) {
   const partner = await db.partner.findUnique({ where: { id: session.partnerId }, select: { kodeMitra: true, namaCabang: true, namaPic: true, whatsapp: true, alamat: true, isActive: true } })
   if (!partner?.isActive) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const orders = await db.order.findMany({ where: { kodeMitra: partner.kodeMitra }, include: { orderItems: { include: { product: true } } }, orderBy: { createdAt: 'desc' }, take: 50 })
+  const orders = await db.order.findMany({
+    where: { kodeMitra: partner.kodeMitra },
+    include: {
+      orderItems: { include: { product: true } },
+      paymentProof: { select: { id: true, fileName: true, mimeType: true, createdAt: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  })
   return NextResponse.json({ partner, orders })
 }
