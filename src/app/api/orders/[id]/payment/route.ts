@@ -9,12 +9,15 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     const { paymentStatus } = await request.json()
     if (!VALID.includes(paymentStatus)) return NextResponse.json({ error: 'Status pembayaran tidak valid' }, { status: 400 })
 
+    const existing = await db.order.findUnique({ where: { id }, include: { paymentProof: { select: { id: true } } } })
+    if (!existing) return NextResponse.json({ error: 'Pesanan tidak ditemukan' }, { status: 404 })
+    if (paymentStatus === 'lunas' && existing.paymentMethod !== 'cod' && !existing.paymentProof) {
+      return NextResponse.json({ error: 'Bukti pembayaran belum diunggah' }, { status: 409 })
+    }
+
     const order = await db.order.update({
       where: { id },
-      data: {
-        paymentStatus,
-        paymentVerifiedAt: paymentStatus === 'lunas' ? new Date() : null,
-      },
+      data: { paymentStatus, paymentVerifiedAt: paymentStatus === 'lunas' ? new Date() : null },
     })
     return NextResponse.json(order)
   } catch (error) {
