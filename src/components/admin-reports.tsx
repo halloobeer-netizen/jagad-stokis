@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { BarChart3, ClipboardList, WalletCards, Users, Package, Download, RefreshCw, CalendarDays } from 'lucide-react'
+import { BarChart3, ClipboardList, WalletCards, Users, Package, Download, RefreshCw, CalendarDays, FileText, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatRupiah, formatTanggal } from '@/lib/utils'
 
@@ -33,6 +33,12 @@ export function AdminReports(){
     return orders.filter(o=>{const d=new Date(o.createdAt);return(!from||d>=from)&&(!to||d<to)})
   },[orders,preset,start,end])
 
+  const periodLabel=useMemo(()=>{
+    const map:Record<string,string>={today:'Hari Ini', '7d':'7 Hari Terakhir','30d':'30 Hari Terakhir',month:'Bulan Ini',all:'Semua Periode'}
+    if(preset==='custom') return `${start||'Awal'} s/d ${end||'Akhir'}`
+    return map[preset]||'Periode Laporan'
+  },[preset,start,end])
+
   const stats=useMemo(()=>{
     const omzet=filtered.reduce((s,o)=>s+o.totalHarga,0)
     const lunas=filtered.filter(o=>o.paymentStatus==='lunas').reduce((s,o)=>s+o.totalHarga,0)
@@ -50,10 +56,65 @@ export function AdminReports(){
     const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`laporan-jagad-stockis-${new Date().toISOString().slice(0,10)}.csv`;a.click();URL.revokeObjectURL(url)
   }
 
+  function pdfEscape(v:string){return v.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)').replace(/[^\x20-\x7E]/g,' ')}
+  function shortMoney(n:number){return 'Rp '+new Intl.NumberFormat('id-ID').format(n)}
+
+  function downloadPdf(){
+    const lines:string[]=[
+      'JAGAD STOCKIS - LAPORAN RINGKAS',
+      `Periode: ${periodLabel}`,
+      `Dibuat: ${new Date().toLocaleString('id-ID')}`,
+      '',
+      `Omzet: ${shortMoney(stats.omzet)}`,
+      `Jumlah Pesanan: ${stats.orders}`,
+      `Pembayaran Lunas: ${shortMoney(stats.lunas)}`,
+      `Belum Lunas: ${shortMoney(stats.belum)}`,
+      `Mitra Aktif: ${stats.partners}`,
+      `Rata-rata Order: ${shortMoney(stats.avg)}`,
+      '',
+      'PRODUK PALING LAKU',
+      ...topProducts.slice(0,5).map(([name,x],i)=>`${i+1}. ${name} - ${x.qty} unit - ${shortMoney(x.total)}`),
+      '',
+      'MITRA TERATAS',
+      ...topPartners.slice(0,5).map(([kode,x],i)=>`${i+1}. ${kode} / ${x.cabang} - ${x.count} order - ${shortMoney(x.total)}`),
+      '',
+      'TRANSAKSI TERBARU',
+      ...filtered.slice(0,12).map(o=>`${new Date(o.createdAt).toLocaleDateString('id-ID')} | ${o.kodeMitra} | ${shortMoney(o.totalHarga)} | ${(o.paymentStatus||'belum_bayar').replaceAll('_',' ')}`),
+    ]
+    const pageChunks:string[][]=[];for(let i=0;i<lines.length;i+=42)pageChunks.push(lines.slice(i,i+42))
+    const objects:string[]=[];const pageIds:number[]=[];const contentIds:number[]=[]
+    objects.push('<< /Type /Catalog /Pages 2 0 R >>')
+    objects.push('')
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+    objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>')
+    for(const chunk of pageChunks){
+      const contentId=objects.length+1;contentIds.push(contentId)
+      let y=800;let stream='BT\n/F1 10 Tf\n'
+      chunk.forEach((line,idx)=>{const isHeading=idx===0||line==='PRODUK PALING LAKU'||line==='MITRA TERATAS'||line==='TRANSAKSI TERBARU';stream+=`${isHeading?'/F2 12 Tf':'/F1 10 Tf'}\n1 0 0 1 48 ${y} Tm (${pdfEscape(line)}) Tj\n`;y-=18})
+      stream+='ET'
+      objects.push(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`)
+      const pageId=objects.length+1;pageIds.push(pageId)
+      objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`)
+    }
+    objects[1]=`<< /Type /Pages /Count ${pageIds.length} /Kids [${pageIds.map(id=>`${id} 0 R`).join(' ')}] >>`
+    let pdf='%PDF-1.4\n';const offsets=[0]
+    objects.forEach((obj,i)=>{offsets[i+1]=pdf.length;pdf+=`${i+1} 0 obj\n${obj}\nendobj\n`})
+    const xref=pdf.length;pdf+=`xref\n0 ${objects.length+1}\n0000000000 65535 f \n`;for(let i=1;i<=objects.length;i++)pdf+=String(offsets[i]).padStart(10,'0')+' 00000 n \n';pdf+=`trailer\n<< /Size ${objects.length+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`
+    const blob=new Blob([pdf],{type:'application/pdf'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`laporan-ringkas-jagad-stockis-${new Date().toISOString().slice(0,10)}.pdf`;a.click();URL.revokeObjectURL(url);toast.success('PDF laporan berhasil dibuat')
+  }
+
+  function printView(){
+    const w=window.open('','_blank','width=1000,height=800');if(!w){toast.error('Popup diblokir browser');return}
+    const trx=filtered.slice(0,100).map(o=>`<tr><td>${new Date(o.createdAt).toLocaleDateString('id-ID')}</td><td><b>${o.kodeMitra}</b><br><small>${o.namaCabang}</small></td><td>${shortMoney(o.totalHarga)}</td><td>${o.status}</td><td>${(o.paymentMethod||'cod').replaceAll('_',' ')}<br><small>${(o.paymentStatus||'belum_bayar').replaceAll('_',' ')}</small></td></tr>`).join('')
+    const products=topProducts.slice(0,5).map(([name,x],i)=>`<tr><td>${i+1}</td><td>${name}</td><td>${x.qty}</td><td>${shortMoney(x.total)}</td></tr>`).join('')
+    const partners=topPartners.slice(0,5).map(([kode,x],i)=>`<tr><td>${i+1}</td><td><b>${kode}</b><br><small>${x.cabang}</small></td><td>${x.count}</td><td>${shortMoney(x.total)}</td></tr>`).join('')
+    w.document.write(`<!doctype html><html><head><title>Laporan JAGAD STOCKIS</title><style>@page{size:A4;margin:14mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#0f172a;margin:0;font-size:12px}h1{font-size:22px;margin:0}.sub{color:#64748b;margin-top:5px}.line{height:4px;background:#dc2626;margin:14px 0 18px}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px}.metric{border:1px solid #e2e8f0;border-radius:8px;padding:10px}.metric span{color:#64748b;font-size:10px}.metric b{display:block;font-size:15px;margin-top:4px}h2{font-size:14px;margin:18px 0 8px}table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e2e8f0;padding:7px 6px;text-align:left;vertical-align:top}th{background:#f8fafc;font-size:10px;text-transform:uppercase}small{color:#64748b}.footer{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:8px;color:#94a3b8;font-size:10px}.no-print{position:fixed;right:20px;top:20px;background:#dc2626;color:white;border:0;border-radius:8px;padding:10px 14px;font-weight:bold;cursor:pointer}@media print{.no-print{display:none}}</style></head><body><button class="no-print" onclick="window.print()">Cetak / Simpan PDF</button><h1>JAGAD STOCKIS</h1><div class="sub">Laporan Ringkas • ${periodLabel}<br>Dibuat ${new Date().toLocaleString('id-ID')}</div><div class="line"></div><div class="metrics"><div class="metric"><span>OMZET</span><b>${shortMoney(stats.omzet)}</b></div><div class="metric"><span>PESANAN</span><b>${stats.orders}</b></div><div class="metric"><span>PEMBAYARAN LUNAS</span><b>${shortMoney(stats.lunas)}</b></div><div class="metric"><span>BELUM LUNAS</span><b>${shortMoney(stats.belum)}</b></div><div class="metric"><span>MITRA AKTIF</span><b>${stats.partners}</b></div><div class="metric"><span>RATA-RATA ORDER</span><b>${shortMoney(stats.avg)}</b></div></div><h2>Produk Paling Laku</h2><table><thead><tr><th>No</th><th>Produk</th><th>Qty</th><th>Nilai</th></tr></thead><tbody>${products||'<tr><td colspan="4">Belum ada data</td></tr>'}</tbody></table><h2>Mitra Teratas</h2><table><thead><tr><th>No</th><th>Mitra</th><th>Order</th><th>Belanja</th></tr></thead><tbody>${partners||'<tr><td colspan="4">Belum ada data</td></tr>'}</tbody></table><h2>Detail Transaksi</h2><table><thead><tr><th>Tanggal</th><th>Mitra</th><th>Total</th><th>Pesanan</th><th>Pembayaran</th></tr></thead><tbody>${trx||'<tr><td colspan="5">Belum ada transaksi</td></tr>'}</tbody></table><div class="footer">JAGAD STOCKIS • Franchise Supply Network</div></body></html>`);w.document.close();w.focus()
+  }
+
   return <div className="space-y-5">
     <div className="rounded-2xl border bg-white p-4 flex flex-col xl:flex-row gap-3 xl:items-end justify-between">
       <div><p className="text-xs font-black uppercase tracking-[.16em] text-red-600">Periode Laporan</p><div className="flex flex-wrap gap-2 mt-3">{[['today','Hari Ini'],['7d','7 Hari'],['30d','30 Hari'],['month','Bulan Ini'],['all','Semua'],['custom','Custom']].map(([v,l])=><button key={v} onClick={()=>setPreset(v)} className={`rounded-full px-3 py-1.5 text-xs font-bold border ${preset===v?'bg-red-600 border-red-600 text-white':'bg-white border-slate-200 text-slate-600'}`}>{l}</button>)}</div>{preset==='custom'&&<div className="flex gap-2 mt-3"><Input type="date" value={start} onChange={e=>setStart(e.target.value)} className="w-40"/><Input type="date" value={end} onChange={e=>setEnd(e.target.value)} className="w-40"/></div>}</div>
-      <div className="flex gap-2"><Button variant="outline" onClick={load}><RefreshCw className="h-4 w-4 mr-2"/>Refresh</Button><Button onClick={exportCsv} className="bg-red-600 hover:bg-red-700"><Download className="h-4 w-4 mr-2"/>Export CSV</Button></div>
+      <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={load}><RefreshCw className="h-4 w-4 mr-2"/>Refresh</Button><Button variant="outline" onClick={printView}><Printer className="h-4 w-4 mr-2"/>Print View</Button><Button variant="outline" onClick={downloadPdf}><FileText className="h-4 w-4 mr-2"/>Download PDF</Button><Button onClick={exportCsv} className="bg-red-600 hover:bg-red-700"><Download className="h-4 w-4 mr-2"/>Export CSV</Button></div>
     </div>
 
     <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
