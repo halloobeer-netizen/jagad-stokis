@@ -36,17 +36,21 @@ model Partner {
 }
 
 model Order {
-  id          String   @id @default(cuid())
-  kodeMitra   String   @map("kode_mitra")
-  namaCabang  String   @map("nama_cabang")
-  namaPic     String   @map("nama_pic")
-  whatsapp    String
-  alamat      String
-  catatan     String?
-  totalHarga  Int      @default(0) @map("total_harga")
-  status      String   @default("menunggu")
-  createdAt   DateTime @default(now()) @map("created_at")
-  orderItems OrderItem[]
+  id                String        @id @default(cuid())
+  kodeMitra         String        @map("kode_mitra")
+  namaCabang        String        @map("nama_cabang")
+  namaPic           String        @map("nama_pic")
+  whatsapp          String
+  alamat            String
+  catatan           String?
+  totalHarga        Int           @default(0) @map("total_harga")
+  status            String        @default("menunggu")
+  paymentMethod     String        @default("cod") @map("payment_method")
+  paymentStatus     String        @default("belum_bayar") @map("payment_status")
+  paymentVerifiedAt DateTime?     @map("payment_verified_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  orderItems        OrderItem[]
+  paymentProof      PaymentProof?
   @@map("orders")
 }
 
@@ -60,4 +64,16 @@ model OrderItem {
   order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
   @@map("order_items")
+}
+
+model PaymentProof {
+  id        String   @id @default(cuid())
+  orderId   String   @unique @map("order_id")
+  mimeType  String   @map("mime_type")
+  fileName  String   @map("file_name")
+  fileData  Bytes    @map("file_data")
+  createdAt DateTime @default(now()) @map("created_at")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  @@index([orderId])
+  @@map("payment_proofs")
 }
