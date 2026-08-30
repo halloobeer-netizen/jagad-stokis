@@ -215,7 +215,7 @@ Do not merge auth flows without understanding them.
 9. Verify admin dashboard
 10. Verify production build
 
-## Mandatory Audit for Next AI
+## Mandatory Audit for Next
 Before coding, report:
 
 1. `src/` architecture
